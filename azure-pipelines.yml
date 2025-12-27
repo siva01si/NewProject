@@ -1,0 +1,74 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger: 'none'
+
+pool:
+  vmImage: windows-latest
+
+variables:
+  BuildConfiguration: Release
+
+stages:
+- stage: Build
+  displayName: 'Build Stage'
+  jobs:
+  - job: Buildjob
+    displayName: 'Build Job'
+
+    steps:
+    - checkout: self
+      clean: true
+   
+# Task-1
+    - task: DotNetCoreCLI@2
+      displayName: Restore 
+      inputs:
+        azureSubscription: 'myazurecicd-serviceconnection'
+        command: 'restore'
+        projects: '**/WebApp.csproj'
+
+    - task: DotNetCoreCLI@2
+      displayName: Build WebApp
+      inputs:
+        azureSubscription: 'myazurecicd-serviceconnection'
+        projects: '**/WebApp.csproj'
+        arguments: '--configuration $(BuildConfiguration)'
+     
+    - task: DotNetCoreCLI@2
+      inputs:
+        azureSubscription: 'myazurecicd-serviceconnection'
+        command: 'publish'
+        publishWebProjects: true
+        arguments: '--configuration $(BuildConfiguration) --output $(build.artifactstagingdirectory)'
+        zipAfterPublish: True
+ 
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'drop'
+        publishLocation: 'Container'
+
+- stage: Deploy
+  displayName: 'Deploy Stage'
+  jobs:
+  - job: Deployjob
+    displayName: 'Deploy Job'
+
+    steps:
+      - task: DownloadBuildArtifacts@1
+        inputs:
+          buildType: 'current'
+          downloadType: 'specific'
+          downloadPath: '$(System.ArtifactsDirectory)'
+
+      - task: AzureRmWebAppDeployment@5
+        inputs:
+          ConnectionType: 'AzureRM'
+          azureSubscription: 'myazurecicd-serviceconnection'
+          appType: 'webApp'
+          WebAppName: 'mygreensapp'
+          packageForLinux: '$(System.ArtifactsDirectory)/**/*.zip'
+        
